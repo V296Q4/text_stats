@@ -37,16 +37,16 @@
 
                     <!-- Branding Image -->
                     <a class="navbar-brand" href="{{ url('/home') }}">
-                        {{ config('app.name', 'Laravel') }}
+                        {{ config('app.name', 'Text Stats') }}
                     </a>
                 </div>
 
                 <div class="collapse navbar-collapse" id="app-navbar-collapse">
                     <!-- Left Side Of Navbar -->
                     <ul class="nav navbar-nav">
+						<li><a href="{{ url('/analyze') }}">Analyze</a></li>
                         <li><a href="{{ url('/browse') }}">Browse Texts</a></li>
 						<li><a href="{{ url('/random') }}">Random Text</a></li>
-						<li><a href="{{ url('/upload') }}">Upload Text</a></li>
 						<li><a href="{{ url('/about') }}">About</a></li>
                     </ul>
 
@@ -65,6 +65,8 @@
                                 <ul class="dropdown-menu" role="menu">
 									<li><a href="/user/{{Auth::id()}}">My Profile</a></li>
 									<li><a href="{{ url('/settings') }}">My Settings</a></li>
+									<li><a href="{{ url('/collections') }}">My Collections</a></li>
+									<li><a href="{{ url('/owned_documents') }}">My Documents</a></li>
 									<li class="divider"></li>
                                     <li>
                                         <a href="{{ url('/logout') }}"
