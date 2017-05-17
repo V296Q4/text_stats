@@ -11,10 +11,6 @@
 |
 */
 
-Route::get('/', function () {
-    return view('home');
-});
-
 Route::get('/about', function () {
     return view('about');
 });
@@ -23,8 +19,9 @@ Route::get('/stoplist', function () {
     return view('stoplist');
 });
 
-
 Auth::routes();
+
+Route::get('/', 'HomeController@index');
 
 Route::get('/home', 'HomeController@index');
 
@@ -61,5 +58,3 @@ Route::post('/document/add_to_collection', 'CollectionController@add_to_collecti
 Route::get('/delete_collection/{id}', 'CollectionController@delete_collection');
 
 Route::get('/logout', 'HomeController@logout');
-
-

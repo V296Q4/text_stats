@@ -121,7 +121,11 @@ class DocumentController extends Controller
 		}
 		
 		//Sentence Scope Statistics
-		$sentence_scope_string = "<hr><h3>Sentence Scope Analysis:</h3><p>Total Sentence Count: $document->sentence_count</p><p>Sentences Ending with '.': $document->period_end_count (" . round($document->period_end_count / $document->sentence_count, 3)*100 . "%)</p><p>Sentences Ending with '?': $document->question_end_count (" . round($document->question_end_count / $document->sentence_count, 3)*100 . "%)</p><p>Sentences Ending with '!': $document->exclaim_end_count (" . round($document->exclaim_end_count / $document->sentence_count, 3)*100 . "%)</p>";
+		$sentence_scope_string = "<hr><h3>Sentence Scope Analysis:</h3>";
+		
+		$other_sentence_ending_count = $document->sentence_count - $document->period_end_count - $document->exclaim_end_count - $document->question_end_count;
+		$sentence_scope_string .= '<table class="table table-responsive table-striped"><thead><tr><th>Sentence End Punctuation</th><th>Quantity</th><th>%</th></tr></thead><tbody><tr><td>Period</td><td>' . $document->period_end_count . '</td><td>' . round($document->period_end_count / $document->sentence_count, 3)*100 . '</td></tr><tr><td>Interrogation Point</td><td>' . $document->question_end_count . '</td><td>' . round($document->question_end_count / $document->sentence_count, 3)*100 . '</td></tr><tr><td>Exclamation Mark</td><td>' . $document->exclaim_end_count . '</td><td>' . round($document->exclaim_end_count / $document->sentence_count, 3)*100 . '</td></tr><tr><td>Other</td><td>' . $other_sentence_ending_count . '</td><td>' . round($other_sentence_ending_count / $document->sentence_count, 3)*100 . '</td></tr></tbody></table>';
+		$sentence_scope_string .= '<p>Total Sentence Count: ' . $document->sentence_count . '</p>';
 		
 		$sentence_scope_string .= '<p>Average Sentence Length: ' . round($document->average_sentence_word_length, 2) . ' word' . self::handle_plural($document->average_sentence_word_length) . ' (' . round($document->average_sentence_character_length, 2) . ' character' . self::handle_plural($document->average_sentence_character_length) . ')</p>';
 		
@@ -177,6 +181,7 @@ class DocumentController extends Controller
 			$table .= "<tr><td class='col-md-1'>$rank</td><td>" . filter_var($word->word, FILTER_SANITIZE_STRING) . "</td><td>$word->quantity (" . round($word->quantity / $ratio_denominator * 100, 2) . "%)</td></tr>";
 			$rank++;
 		}
+		//$table .= '<tr><td colspan="3"><a class="text-center" role="button" data-toggle="collapse" href="#collapseWords' . $table_id . '" aria-expanded="false" aria-controls="collapseWords' . $table_id . '">Collapse Table</a></td></tr>';
 		$table .= '</tbody></table></div></div>' . '<p></p>';
 		return $table;
 	}

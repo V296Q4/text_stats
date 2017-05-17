@@ -105,7 +105,7 @@
 		var sentence_lengths = {!! $sentence_lengths !!};
 		var data = new google.visualization.arrayToDataTable(sentence_lengths);
 		var chart = new google.visualization.Histogram(document.getElementById('sentence_lengths_chart_div'));
-		var options = {'title': 'Sentence Lengths'};
+		var options = {'title': 'Sentence Lengths', 'legend':'none'};
 		chart.draw(data, options);
     }
 	@endif
@@ -116,7 +116,7 @@
 		var word_lengths = {!! $word_lengths !!};
 		var data = new google.visualization.arrayToDataTable(word_lengths);
 		var chart = new google.visualization.ColumnChart(document.getElementById('word_lengths_chart_div'));
-		var options = {'title': 'Word Lengths'};
+		var options = {'title': 'Word Lengths', 'legend':'none'};
 		chart.draw(data, options);
 	}
 	@endif	
