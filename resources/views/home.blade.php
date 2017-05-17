@@ -13,10 +13,9 @@
 		
             <div class="panel panel-default">
                 <div class="panel-heading"><h2 style="text-align:center">Text Stats</h2></div>
-
                 <div class="panel-body">
                     
-					<p></p>
+					<p>Click 'Analyze' at the top of the page to get started, or 'Browse' to see texts analyzed by other users.</p>
 
 					@if(isset($documents_analyzed))
 					<p>Documents Analyzed: {{ $documents_analyzed }}.</p>
