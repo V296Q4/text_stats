@@ -65,6 +65,7 @@ class UploadController extends Controller
 		$document->created_by = (Auth::Check()) ? intval(Auth::user()->id) : -1;
 		$document->created_at = date('Y-m-d H:i:s');//use current date
 		
+		if(strlen($document->description) === 0){
 			$document->description = '';
 		}
 		if(strlen($document->title) === 0){
@@ -174,7 +175,7 @@ class UploadController extends Controller
 				
 				//Non frontwords frequency list //TODO: this + frontwords list can replace word lengths list?
 				if(count($words_in_sentence) > 1){
-					for($i = 1; $i < count($words_in_sentence); $i++){
+					for($i = 1; $i < count($words_in_sentence); $i++){//TODO: check encoding? must be utf-8
 						if(isset($sentence_non_frontwords[$words_in_sentence[$i]])){
 							$sentence_non_frontwords[$words_in_sentence[$i]] ++;
 						}
