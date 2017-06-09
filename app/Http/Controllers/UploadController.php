@@ -56,19 +56,18 @@ class UploadController extends Controller
 		$document_insert_content = array();
 		
 		//Basic info:
-		$document->title = substr(filter_var(trim(Input::get('title')), FILTER_SANITIZE_STRING),0,128);
-		$document->description = substr(filter_var(trim(Input::get('description')), FILTER_SANITIZE_STRING),0,2048);
-		$document->text = trim(Input::get('text'));
+		$document->title = mb_convert_encoding(substr(filter_var(trim(Input::get('title')), FILTER_SANITIZE_STRING),0,128), "UTF-8");
+		$document->description = mb_convert_encoding(substr(filter_var(trim(Input::get('description')), FILTER_SANITIZE_STRING),0,2048), "UTF-8");
+		$document->text = mb_convert_encoding(trim(Input::get('text')), "UTF-8");
 		$document->character_count = strlen($document->text);
 		$document->type = substr(filter_var(trim(Input::get('type')), FILTER_SANITIZE_STRING),0,64);
 		$document->is_private = Input::get('is_private') ? true : false;
 		$document->created_by = (Auth::Check()) ? intval(Auth::user()->id) : -1;
 		$document->created_at = date('Y-m-d H:i:s');//use current date
 		
-		if($document->description == 0){
 			$document->description = '';
 		}
-		if($document->title == 0){
+		if(strlen($document->title) === 0){
 			$document->title = $document->created_at;
 		}
 		
@@ -251,7 +250,7 @@ class UploadController extends Controller
 			$total_chars = 0;
 			foreach($raw_word_list as $word){
 				$word = trim($word);
-				if(strlen($word) > 0){
+				if(strlen($word) > 0 && mb_check_encoding($word, "UTF-8")){
 					if(strlen($word) > strlen($document->longest_word)){
 						$document->longest_word = $word;
 					}
