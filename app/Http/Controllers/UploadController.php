@@ -46,6 +46,25 @@ class UploadController extends Controller
 		return Auth::check() ? 2000000 : 1000000;
 	}
 	
+	public function clean_string($string, $length){
+		if($length === -1){
+			return mb_convert_encoding(filter_var(trim($string), FILTER_SANITIZE_STRING), "UTF-8");
+		}
+		else{
+			return mb_convert_encoding(substr(filter_var(trim($string), FILTER_SANITIZE_STRING),0,$length), "UTF-8");
+		}
+	}
+	
+	public function trim_value(&$value){
+		$value = trim($value);
+	}
+	
+	
+	public function is_in_stoplist($word){
+		$stoplist = config('stoplist.postgres_stoplist');
+		return in_array(strtolower($word), $stoplist);
+	}
+	
     /**
      * Handle posted (submitted) documents.
      *
@@ -56,8 +75,8 @@ class UploadController extends Controller
 		$document_insert_content = array();
 		
 		//Basic info:
-		$document->title = mb_convert_encoding(substr(filter_var(trim(Input::get('title')), FILTER_SANITIZE_STRING),0,128), "UTF-8");
-		$document->description = mb_convert_encoding(substr(filter_var(trim(Input::get('description')), FILTER_SANITIZE_STRING),0,2048), "UTF-8");
+		$document->title = self::clean_string(Input::get('title'), 128);
+		$document->description = self::clean_string(Input::get('description'), 2048);
 		$document->text = mb_convert_encoding(trim(Input::get('text')), "UTF-8");
 		$document->character_count = strlen($document->text);
 		$document->type = substr(filter_var(trim(Input::get('type')), FILTER_SANITIZE_STRING),0,64);
@@ -73,12 +92,12 @@ class UploadController extends Controller
 		}
 		
 		if(strlen($document->title) < 3){
-			//return self::StopOnError('Title must be at least 3 characters long.');//TODO but if guest!
+			//return self::StopOnError('Title must be at least 3 characters long.');//TODO but if guest?
 		}
 		if($document->character_count < 2){
 			return self::StopOnError('Text must be at least 2 characters long.');
 		}
-		if($document->character_count > self::GetCharacterLimit()){//TODO: or just auto cut to limit?
+		if($document->character_count > self::GetCharacterLimit()){//TODO or just auto cut to limit?
 			return self::StopOnError("Text is $document->character_count characters long.  The limit is $character_limit");
 		}
 		
@@ -97,15 +116,34 @@ class UploadController extends Controller
 		 * Paragraph-scope processing:
 		 * 
 		 */
-		//$paragraph_list = preg_split('/[\r\n]+((\r|\n|\r\n)[^\r\n]+)*/', $document->text);
-		$document->paragraph_count = -1;//count($paragraph_list);
+		$all_paragraphs = preg_split('/(?<=[\r\n])/', $document->text);
+		array_walk($all_paragraphs, 'self::trim_value');
+		$all_paragraphs = array_filter($all_paragraphs, function($value) { return $value !== ''; });
+		$dialogue_paragraphs = array();
+		$non_dialogue_paragraphs = array();
+		foreach($all_paragraphs as $paragraph){
+			if(strpos($paragraph, '"') !== false || strpos($paragraph, '“') !== false){//TODO support for british dialogue quotes
+				$dialogue_paragraphs[] = $paragraph;
+			}
+			else{
+				$non_dialogue_paragraphs[] = $paragraph;
+			}
+		}
+		unset($all_paragraphs);
 		
-		//$paragraph_average_word_length
-		//$paragraph_average_sentence_length
-		//foreach($paragraph_list as $paragraph){
-			//$paragraph_sentences = preg_split('/([\.?!][ \n\r])/', $paragraph);
+		$document->dialogue_paragraph_count = count($dialogue_paragraphs);
+		$document->non_dialogue_paragraph_count = count($non_dialogue_paragraphs);
+		
+		$dialogue_sentences = array();
+		$non_dialogue_sentences = array();
+		//TODO make histogram of paragraph lengths?
+		// foreach($dialogue_paragraphs as $paragraph){
 			
-		//}
+			// $sentences = preg_split('/(?<=[.?!\r\n]|-)(?<![\s"“\']\p{Lu}.|\s\p{Lu}[a-z].)(?=[\s\'"”“]+\p{Lu}|"|\d|“)(?![\'"])/', $paragraph);
+			// foreach($sentences as $sentence){
+				
+			// }
+		// }
 		
 		/*
 		 * Sentence-scope processing:
@@ -114,15 +152,21 @@ class UploadController extends Controller
 		$raw_word_list = array();
 		$sentence_frontwords = array();
 		$sentence_non_frontwords = array();
-		$sentence_list = preg_split('/(?<=[.?!\r\n]|-)(?<![\s"“\']\p{Lu}.|\s\p{Lu}[a-z].)[\s\'"”“]+(?=\p{Lu}|"|\d|“)/', $document->text);
+		
+		//note \p{Lu} in the following line matches any uppercase letter that has a lowercase variant, \p{L} is any letter in any language
+		$sentence_list = preg_split('/(?<=[.?!\r\n]|-)(?<![\s"“\']\p{Lu}.|\s\p{Lu}[a-z].)(?=[\s\'"”“]+\p{L}|"|\d|“)(?![\'])/', $document->text);
 
-		$document->sentence_count = sizeof($sentence_list);
+		array_walk($sentence_list, 'self::trim_value');
+		$sentence_list = array_filter($sentence_list, function($value) { return $value !== ''; });
+		
+		$document->sentence_count = count($sentence_list);
+		
 		if($document->sentence_count > 0){
 			$document->period_end_count = 0;
 			$document->question_end_count = 0;
 			$document->exclaim_end_count = 0;
-			$document->other_end_count = 0;
-			
+
+			$sentence_length_vs_commas = array();
 			$sentence_lengths = array();
 			$word_lengths = array();
 			$total_sentence_characters = 0;
@@ -130,8 +174,7 @@ class UploadController extends Controller
 			foreach($sentence_list as $sentence){
 				//Tally up end-sentence punctuation
 				$last_char = substr($sentence, -1);
-				//(if the sentence ends with a quote, use second to last character instead)
-				if($last_char == '"' || $last_char == '”' || $last_char == '\''){
+				if($last_char == '"' || $last_char == '”' || $last_char == '\''){//(if the sentence ends with a quote, use second to last character instead)
 					$last_char = substr($sentence, -2, 1);
 				}
 				if($last_char == '.'){
@@ -143,14 +186,13 @@ class UploadController extends Controller
 				elseif($last_char == '?'){
 					$document->question_end_count++;
 				}
-				else{
-					$document->other_end_count++;
-				}
 				
 				$words_in_sentence = array_filter(preg_split('/([\s,;.!?()"“”–]+)/', $sentence), function($value){return $value !== '';});
-				array_push($raw_word_list, ...$words_in_sentence);
+				if(count($words_in_sentence) > 0){
+					array_push($raw_word_list, ...$words_in_sentence);
+				}
 				
-				//Word Lengths List
+				//adding to word_lengths list
 				foreach($words_in_sentence as $word){
 					$word_length = strlen($word);
 					if($word_length > 0){
@@ -163,7 +205,7 @@ class UploadController extends Controller
 					}
 				}
 				
-				//frontwords frequency list
+				//adding to frontwords frequency list
 				if(count($words_in_sentence) > 0){
 					if(isset($sentence_frontwords[reset($words_in_sentence)])){
 						$sentence_frontwords[reset($words_in_sentence)] ++;
@@ -173,9 +215,9 @@ class UploadController extends Controller
 					}
 				}
 				
-				//Non frontwords frequency list //TODO: this + frontwords list can replace word lengths list?
+				//adding to non frontwords frequency list //TODO: this + frontwords list can replace word lengths list?
 				if(count($words_in_sentence) > 1){
-					for($i = 1; $i < count($words_in_sentence); $i++){//TODO: check encoding? must be utf-8
+					for($i = 1; $i < count($words_in_sentence); $i++){//TODO check encoding? must be utf-8
 						if(isset($sentence_non_frontwords[$words_in_sentence[$i]])){
 							$sentence_non_frontwords[$words_in_sentence[$i]] ++;
 						}
@@ -185,7 +227,7 @@ class UploadController extends Controller
 					}
 				}
 				
-				//Building sentence_lengths array
+				//adding to sentence_lengths array
 				if(!isset($sentence_lengths[count($words_in_sentence)])){
 					$sentence_lengths[count($words_in_sentence)] = 1;
 				}
@@ -193,21 +235,41 @@ class UploadController extends Controller
 					$sentence_lengths[count($words_in_sentence)]++;
 				}
 				
-				//Building sentence lengths stats
+				//comma vs sentence length graph data
+				$commas_in_sentence = substr_count($sentence, ',');
+				$sentence_length_vs_commas[count($words_in_sentence)] = $commas_in_sentence;//TODO this is cumulative not average
+				
+				//building sentence lengths stats
 				if(!isset($document->longest_sentence_content) || strlen($sentence) > strlen($document->longest_sentence_content)){
-					$document->longest_sentence_word_count = sizeof($words_in_sentence);
+					$document->longest_sentence_word_count = count($words_in_sentence);
 					$document->longest_sentence_content = $sentence;
 				}
 				if(!isset($document->shortest_sentence_content) || strlen($sentence) < strlen($document->shortest_sentence_content)){
-					$document->shortest_sentence_word_count = sizeof($words_in_sentence);
+					$document->shortest_sentence_word_count = count($words_in_sentence);
 					$document->shortest_sentence_content = $sentence;
 				}
 				
 				$total_sentence_characters += strlen($sentence);
 			}
+			unset($sentence_list);
 			
 			$document->average_sentence_character_length = $total_sentence_characters / $document->sentence_count;
-			$document->average_sentence_word_length = sizeof($raw_word_list) / $document->sentence_count;			
+			$document->average_sentence_word_length = count($raw_word_list) / $document->sentence_count;			
+			
+			//Create comma vs sentence string for chart
+			ksort($sentence_length_vs_commas);
+			if(count($sentence_length_vs_commas) <= 1){
+				$document->commas_per_sentence = '';
+			}
+			else{
+				$document->commas_per_sentence = '[["Sentence Length", "Commas"],';
+				foreach($sentence_length_vs_commas as $length => $comma_count){
+					//$comma_count /= $sentence_lengths[$length];
+					$document->commas_per_sentence .= '[' . $length . ', ' . $comma_count . '],';
+				}
+				$document->commas_per_sentence = substr($document->commas_per_sentence, 0, strlen($document->commas_per_sentence)-1) . ']';
+			
+			}
 			
 			//Create word_lengths string for chart
 			if(count($word_lengths) <= 1){
@@ -226,16 +288,24 @@ class UploadController extends Controller
 				$document->sentence_lengths = '';
 			}
 			else{
-				$document->sentence_lengths = '[["Sentence Length"],';
-				foreach($sentence_lengths as $key => $value){
-					for($i = 0; $i < $value; $i++){
-						$document->sentence_lengths .= '[' . $key . '],';
+				$document->sentence_lengths = '[["Sentence Length", "Quantity"],';
+				$currentBucket = 2;
+				$bucketContents = 0;
+				ksort($sentence_lengths);
+				foreach($sentence_lengths as $length => $quantity){
+					if($length <= $currentBucket){
+						$bucketContents += $quantity;
+					}
+					else{//move to next bucket size
+						$document->sentence_lengths .= '[' . $currentBucket . ', ' . $bucketContents . '],';
+						$bucketContents = $quantity;
+						$currentBucket += 2;
 					}
 				}
+				$document->sentence_lengths .= '[' . $currentBucket . ', ' . $bucketContents . '],';
 				$document->sentence_lengths = substr($document->sentence_lengths, 0, strlen($document->sentence_lengths)-1) . ']';
 			}
 			
-			$document_insert_content += ['sentence_count' => $document->sentence_count, 'period_end_count' => $document->period_end_count, 'question_end_count' => $document->question_end_count, 'exclaim_end_count' => $document->exclaim_end_count, 'longest_sentence_word_count' => $document->longest_sentence_word_count, 'longest_sentence_content' => $document->longest_sentence_content, 'shortest_sentence_word_count' => $document->shortest_sentence_word_count, 'shortest_sentence_content' => $document->shortest_sentence_content, 'average_sentence_word_length' => $document->average_sentence_word_length, 'average_sentence_character_length' => $document->average_sentence_character_length, 'sentence_lengths' => $document->sentence_lengths, 'word_lengths' => $document->word_lengths];
 		}
 		
 		/*
@@ -246,7 +316,7 @@ class UploadController extends Controller
 		$word_list_postgres_stoplist = array();
 		$document->word_count = 0;
 		$document->longest_word = '';
-		if(sizeof($raw_word_list) > 0){
+		if(count($raw_word_list) > 0){
 			//Create word frequency list
 			$total_chars = 0;
 			foreach($raw_word_list as $word){
@@ -275,10 +345,9 @@ class UploadController extends Controller
 			$document->average_word_length = $total_chars / max($document->word_count, 1);
 			arsort($word_frequency_list);
 			
-			//Apply postgres stoplist
+			//create a postgres stoplist version
 			foreach($word_frequency_list as $word => $frequency){
-				$stoplist = config('stoplist.postgres_stoplist');
-				if(!in_array($word, $stoplist)){
+				if(!self::is_in_stoplist($word)){
 					$word_list_postgres_stoplist[$word] = $frequency;
 				}
 			}
@@ -286,37 +355,30 @@ class UploadController extends Controller
 			
 			$word_frequency_list = array_slice($word_frequency_list, 0, 50, true);
 			
-			$document_insert_content += [
-				'word_count' => $document->word_count,
-				'unique_word_count' => $document->unique_word_count,
-				'paragraph_count' => $document->paragraph_count,
-				'average_word_length' => $document->average_word_length,
-				'longest_word' => $document->longest_word,
-			];
-			
 		}
 		
-		if(sizeof($sentence_frontwords) > 0 || sizeof($sentence_non_frontwords) > 0){
+		if(count($sentence_frontwords) > 0 || count($sentence_non_frontwords) > 0){
 			//Create proper nouns list
-			//TODO: how to filter out start of dialogue following an opening tag, IE [He smiled and said, "Why?"]
+			//TODO: how to filter out start of dialogue following an opening tag, IE [He smiled and said, "Sure."]
 			$proper_names = array();
 			foreach($sentence_non_frontwords as $word => $frequency){
-				$char = $word[0];
-				if($char >= 'A' && $char <= 'Z' && strlen($word) >= 2 && $word[1] != "'"){
-					if(strpos($word, '\'s') !== false){
-						$word = substr($word, 0, strpos($word, '\'s'));
-					}
-					
-					if(isset($proper_names[$word])){
-						$proper_names[$word] += $frequency;
-					}
-					else{
-						$proper_names[$word] = $frequency;
+				
+				if(!self::is_in_stoplist($word)){
+					$char = $word[0];
+					if($char >= 'A' && $char <= 'Z' && strlen($word) >= 2 && $word[1] !== "'"){
+						if(strpos($word, '\'s') !== false){
+							$word = substr($word, 0, strpos($word, '\'s'));
+						}
+						
+						if(isset($proper_names[$word])){
+							$proper_names[$word] += $frequency;
+						}
+						else{
+							$proper_names[$word] = $frequency;
+						}
 					}
 				}
-				
 			}
-			
 			foreach($sentence_frontwords as $word => $frequency){
 				if(isset($proper_names[$word])){
 					$proper_names[$word] += $frequency;
@@ -331,7 +393,10 @@ class UploadController extends Controller
 			
 		}
 		
+		$document->average_paragraph_word_count = round($document->word_count / ($document->non_dialogue_paragraph_count + $document->dialogue_paragraph_count)*100)/100;
+		
 		/*
+		 *  db category ids:
 		 *	0 - word
 		 *	1 - light stoplist
 		 *  2 - heavy stoplist
@@ -345,23 +410,25 @@ class UploadController extends Controller
 		$insertable_frontword_frequencies = array();
 		$insertable_proper_frequencies = array();
 		
+		// dd($document['attributes']);
+		
 		//TODO: decide what to do for guests
 		if(Auth::Guest()){
-			foreach($word_frequency_list as $word => $frequency){
-				$insertable_word_frequencies[] = ['word' => $word, 'quantity' => $frequency, 'category_id' => 0];
-			}	
+			// foreach($word_frequency_list as $word => $frequency){
+				// $insertable_word_frequencies[] = ['word' => $word, 'quantity' => $frequency, 'category_id' => 0];
+			// }	
 
-			foreach($word_list_postgres_stoplist as $word => $frequency){
-				$insertable_stoplisted_word_frequencies[] = ['word' => $word, 'quantity' => $frequency, 'category_id' => 1];
-			}				
+			// foreach($word_list_postgres_stoplist as $word => $frequency){
+				// $insertable_stoplisted_word_frequencies[] = ['word' => $word, 'quantity' => $frequency, 'category_id' => 1];
+			// }				
 			
-			foreach($sentence_frontwords as $word => $frequency){
-				$insertable_frontword_frequencies[] = ['word' => $word, 'quantity' => $frequency];
-			}				
+			// foreach($sentence_frontwords as $word => $frequency){
+				// $insertable_frontword_frequencies[] = ['word' => $word, 'quantity' => $frequency];
+			// }				
 			
-			foreach($proper_names as $word => $frequency){
-				$insertable_proper_frequencies[] = ['word' => $word, 'quantity' => $frequency, 'category_id' => 3];
-			}		
+			// foreach($proper_names as $word => $frequency){
+				// $insertable_proper_frequencies[] = ['word' => $word, 'quantity' => $frequency, 'category_id' => 3];
+			// }		
 			
 			//$document->insertable_word_frequencies = $insertable_word_frequencies;
 			//$document->insertable_stoplisted_word_frequencies = $insertable_stoplisted_word_frequencies;
@@ -376,9 +443,9 @@ class UploadController extends Controller
 			//return redirect()->action('DocumentController@guest_document', [$document, '$test' => $insertable_word_frequencies, $insertable_stoplisted_word_frequencies, $insertable_frontword_frequencies, $insertable_proper_frequencies]);
 		}
 		
-		DB::transaction(function() use (&$new_document_id, $document, $document_insert_content, $word_frequency_list, $word_list_postgres_stoplist, $sentence_frontwords, $insertable_proper_frequencies, $proper_names, $insertable_stoplisted_word_frequencies, $insertable_frontword_frequencies, $insertable_proper_frequencies){
+		DB::transaction(function() use (&$new_document_id, $document, $word_frequency_list, $word_list_postgres_stoplist, $sentence_frontwords, $insertable_proper_frequencies, $proper_names, $insertable_stoplisted_word_frequencies, $insertable_frontword_frequencies, $insertable_proper_frequencies){
 			//Insert document
-			$new_document_id = DB::table('documents')->insertGetId($document_insert_content);
+			$new_document_id = DB::table('documents')->insertGetId($document['attributes']);
 			
 			//Prepare the word data
 			foreach($word_frequency_list as $word => $frequency){
@@ -403,6 +470,7 @@ class UploadController extends Controller
 			DB::table('document_frontword')->insert($insertable_frontword_frequencies);	
 			DB::table('document_word')->insert($insertable_proper_frequencies);	
 			
+			//Update statistics
 			DB::table('global_stats')->where('stat','documents_analyzed')->increment('value');
 			DB::table('global_stats')->where('stat','words_analyzed')->increment('value', $document->word_count);
 		});
@@ -410,7 +478,6 @@ class UploadController extends Controller
 		//Redirect:
 		if(!isset($new_document_id)){
 			return Redirect::to('home')->with('message','<p class="bg-danger">Error.</p>');
-			
 		}
 		return Redirect::to("/document/$new_document_id")->with('message', '<p class="bg-success">Document uploaded successfully.</p>');
 			

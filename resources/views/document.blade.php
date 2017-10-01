@@ -19,15 +19,22 @@
 					{!! $main_text !!}
 					
 					{!! $word_scope_string !!}
+					
 					@if(isset($word_lengths))
 					<div id="word_lengths_chart_div"></div>
 					@endif
 					
 					{!! $sentence_scope_string !!}
+					
 					@if(isset($sentence_lengths))
 					<div id="sentence_lengths_chart_div"></div>
 					@endif
 					
+					@if(isset($commas_per_sentence))
+					<div id="commas_per_sentence_chart_div"></div>
+					@endif
+					
+					{!! $paragraph_scope_string !!}
 
 					
                 </div>
@@ -96,16 +103,26 @@
 <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 <script type="text/javascript">
-	// Load the Visualization API and the piechart package.
-    google.charts.load('current', {'packages':['corechart']});
+    google.charts.load('current', {'packages':['corechart', 'line', 'bar']});
 
 	@if(isset($sentence_lengths))
 	google.charts.setOnLoadCallback(drawSentenceLengthsChart);
     function drawSentenceLengthsChart() {
 		var sentence_lengths = {!! $sentence_lengths !!};
 		var data = new google.visualization.arrayToDataTable(sentence_lengths);
-		var chart = new google.visualization.Histogram(document.getElementById('sentence_lengths_chart_div'));
+		var chart = new google.visualization.ColumnChart(document.getElementById('sentence_lengths_chart_div'));
 		var options = {'title': 'Sentence Lengths', 'legend':'none'};
+		chart.draw(data, options);
+    }
+	@endif
+	
+	@if(isset($commas_per_sentence))
+	google.charts.setOnLoadCallback(drawCommasPerSentenceChart);
+    function drawCommasPerSentenceChart() {
+		var commas_per_sentence = {!! $commas_per_sentence !!};
+		var data = new google.visualization.arrayToDataTable(commas_per_sentence);
+		var chart = new google.visualization.LineChart(document.getElementById('commas_per_sentence_chart_div'));
+		var options = {'title': 'Commas VS Sentence Lengths', 'legend':'none'};
 		chart.draw(data, options);
     }
 	@endif

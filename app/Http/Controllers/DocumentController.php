@@ -25,16 +25,13 @@ class DocumentController extends Controller
 			return Redirect::to("/document/" . $random_document->id);
 		}
 		else{
-			//TODO: error
-			return view('home');
+			return Redirect::to('home')->with('message', '<p class="bg-warning">Document not found.</p>');
 		}
 	}
 
 	
 	public function guest_document(\App\Document $document){
-	//public function guest_document(\App\Document $document, $insertable_word_frequencies, $insertable_stoplisted_word_frequencies, $insertable_frontword_frequencies, $insertable_proper_frequencies){
 		dd($document);
-		//dd($document, $insertable_word_frequencies, $insertable_stoplisted_word_frequencies, $insertable_frontword_frequencies, $insertable_proper_frequencies);
 	}
 	
     /**
@@ -43,20 +40,17 @@ class DocumentController extends Controller
      */
     public function index($id)
     {
-		
 		$document_id = intval($id);
-		$document = DB::table('documents as d')->join('users', 'users.id', '=', 'd.created_by')->select('d.id as id', 'd.title', 'd.version', 'd.type', 'd.is_private', 'd.text',  'd.word_count', 'd.unique_word_count', 'd.average_word_length',  'd.character_count', 'd.paragraph_count', 'd.created_at', 'users.name as created_by', 'd.created_by as created_by_id', 'd.sentence_count', 'd.period_end_count', 'd.question_end_count', 'd.exclaim_end_count', 'd.longest_sentence_word_count', 'd.longest_sentence_content', 'd.shortest_sentence_word_count', 'd.shortest_sentence_content', 'd.average_sentence_word_length', 'd.average_sentence_character_length', 'd.sentence_lengths', 'd.word_lengths', 'd.longest_word', 'd.description')->where('d.id', $document_id)->first();
+		$document = DB::table('documents as d')->join('users', 'users.id', '=', 'd.created_by')->select('d.id as id', 'd.title', 'd.version', 'd.type', 'd.is_private', 'd.text',  'd.word_count', 'd.unique_word_count', 'd.average_word_length',  'd.character_count', 'd.created_at', 'users.name as created_by', 'd.created_by as created_by_id', 'd.sentence_count', 'd.period_end_count', 'd.question_end_count', 'd.exclaim_end_count', 'd.longest_sentence_word_count', 'd.longest_sentence_content', 'd.shortest_sentence_word_count', 'd.shortest_sentence_content', 'd.average_sentence_word_length', 'd.average_sentence_character_length', 'd.sentence_lengths', 'd.word_lengths', 'd.commas_per_sentence', 'd.longest_word', 'd.description', 'd.dialogue_paragraph_count', 'd.non_dialogue_paragraph_count', 'd.average_paragraph_word_count')->where('d.id', $document_id)->first();
 		$view_variables = array();
-		
-		//jump in here
-		
+
 		if(!isset($document)){
-			return Redirect::to("/home");//TODO 
+			return Redirect::to('home')->with('message', '<p class="bg-warning">Document not found.</p>');
 		}
 		
 		//Private Document Handling
 		if($document->is_private && $document->created_by_id !== Auth::id()){
-			return Redirect::to("/home");//TODO
+			return Redirect::to('home')->with('message', '<p class="bg-warning">Document not found.</p>');
 		}
 
 		//Create primary string to display in blade
@@ -84,19 +78,19 @@ class DocumentController extends Controller
 		if(strlen($document->description) > 0){
 			$main_text .= '<b>Description:</b> ' . $document->description;
 		}
-		
+		$main_text .= '<p title="Includes Spaces">Character Count: ' . $document->character_count . '</p>';
 
-		//$main_text .= '<p>Paragraph Count: ' . $document->paragraph_count . '</p>';
-		
-		//Word Scope Statistics
+		/*
+		 * Word Scope Statistics
+		 *
+		 */
 		$word_scope_string = '<hr><h3>Word Scope Analysis:</h3>';
-		$word_scope_string .= '<p title="Includes Spaces">Character Count: ' . $document->character_count . '</p><p>Word Count: ' . $document->word_count . '</p>';
+		$word_scope_string .= '<p>Word Count: ' . $document->word_count . '</p>';
 		$percent_unique_words = round($document->unique_word_count * 100 / max($document->word_count, 1), 2);
 		$word_scope_string .= "<p>Unique Word Count: $document->unique_word_count ($percent_unique_words%)</p>";
-		$word_scope_string .= "Longest Word <small>(" . strlen($document->longest_word) . " characters)</small>: <blockquote>" . filter_var($document->longest_word, FILTER_SANITIZE_STRING) . "</blockquote>";
-		
 		$word_scope_string .= '<p>Average Word Length: ' . round($document->average_word_length, 2) . ' characters</p>';
-		
+		$word_scope_string .= "Longest Word <small>(" . strlen($document->longest_word) . " characters)</small>: <blockquote>" . filter_var($document->longest_word, FILTER_SANITIZE_STRING) . "</blockquote>";
+
 		//Create Frequent Words table
 		if($percent_unique_words != 100){
 			$frequent_words = DB::table('document_word')->select('word', 'quantity')->where([['document_id', $document_id], ['category_id', 0]])->orderBy('quantity', 'desc')->get();
@@ -120,17 +114,17 @@ class DocumentController extends Controller
 			$view_variables['word_lengths'] = $document->word_lengths;
 		}
 		
-		//Sentence Scope Statistics
+		/*
+		 * Sentence Scope Statistics
+		 *
+		 */
 		$sentence_scope_string = "<hr><h3>Sentence Scope Analysis:</h3>";
 		
 		$other_sentence_ending_count = $document->sentence_count - $document->period_end_count - $document->exclaim_end_count - $document->question_end_count;
 		$sentence_scope_string .= '<table class="table table-responsive table-striped"><thead><tr><th>Sentence End Punctuation</th><th>Quantity</th><th>%</th></tr></thead><tbody><tr><td>Period</td><td>' . $document->period_end_count . '</td><td>' . round($document->period_end_count / $document->sentence_count, 3)*100 . '</td></tr><tr><td>Interrogation Point</td><td>' . $document->question_end_count . '</td><td>' . round($document->question_end_count / $document->sentence_count, 3)*100 . '</td></tr><tr><td>Exclamation Mark</td><td>' . $document->exclaim_end_count . '</td><td>' . round($document->exclaim_end_count / $document->sentence_count, 3)*100 . '</td></tr><tr><td>Other</td><td>' . $other_sentence_ending_count . '</td><td>' . round($other_sentence_ending_count / $document->sentence_count, 3)*100 . '</td></tr></tbody></table>';
 		$sentence_scope_string .= '<p>Total Sentence Count: ' . $document->sentence_count . '</p>';
-		
 		$sentence_scope_string .= '<p>Average Sentence Length: ' . round($document->average_sentence_word_length, 2) . ' word' . self::handle_plural($document->average_sentence_word_length) . ' (' . round($document->average_sentence_character_length, 2) . ' character' . self::handle_plural($document->average_sentence_character_length) . ')</p>';
-		
 		$sentence_scope_string .= 'Shortest Sentence <small>(' . strlen($document->shortest_sentence_content) . ' character' . self::handle_plural(strlen($document->shortest_sentence_content)) . ', or ' . $document->shortest_sentence_word_count . ' word' . self::handle_plural($document->shortest_sentence_word_count) . ')</small>: <blockquote>' . filter_var($document->shortest_sentence_content, FILTER_SANITIZE_STRING) . '</blockquote>';
-		
 		$sentence_scope_string .= 'Longest Sentence <small>(' . strlen($document->longest_sentence_content) . ' character' . self::handle_plural($document->longest_sentence_content) . ', or ' . $document->longest_sentence_word_count . ' word' . self::handle_plural($document->longest_sentence_word_count) . ')</small>: <blockquote>' . filter_var($document->longest_sentence_content, FILTER_SANITIZE_STRING) . '</blockquote>';
 		
 		//Create Frequent Frontword Table
@@ -144,7 +138,24 @@ class DocumentController extends Controller
 			$view_variables['sentence_lengths'] = $document->sentence_lengths;
 		}
 		
-		//Create sidebar's collection list
+		//Commas vs Sentence Lengths Chart
+		if(strlen($document->commas_per_sentence) > 0){
+			$view_variables['commas_per_sentence'] = $document->commas_per_sentence;
+		}
+		
+				
+		/*
+		 * Paragraph Scope Statistics
+		 *
+		 */
+		$paragraph_scope_string = '<hr><h3>Paragraph Scope Analysis:</h3>';
+		$paragraph_scope_string .= '<p>Paragraph Count: ' . ($document->dialogue_paragraph_count + $document->non_dialogue_paragraph_count) . ' (' . round($document->dialogue_paragraph_count * 10000/ ($document->dialogue_paragraph_count + $document->non_dialogue_paragraph_count))/100 . '% containing dialogue)</p>';
+		$paragraph_scope_string .= '<p>Average Paragraph Length: ' . $document->average_paragraph_word_count . ' words</p>';
+		
+		/*
+		 * Collections Sidebar
+		 *
+		 */
 		$collection_options = null;
 		$collections = DB::table('collections')->select('name', 'id')->where('created_by', Auth::id())->get();
 		if(sizeof($collections) > 0){
@@ -155,7 +166,7 @@ class DocumentController extends Controller
 		}
 
 		//Send off
-		$view_variables += ['title' => $document->title, 'raw_url'=> $raw_url, 'main_text' => $main_text, 'collection_options' => $collection_options, 'document_id' => $document_id, 'sentence_scope_string' => $sentence_scope_string, 'word_scope_string' => $word_scope_string];
+		$view_variables += ['title' => $document->title, 'raw_url'=> $raw_url, 'main_text' => $main_text, 'collection_options' => $collection_options, 'document_id' => $document_id, 'paragraph_scope_string' => $paragraph_scope_string, 'sentence_scope_string' => $sentence_scope_string, 'word_scope_string' => $word_scope_string];
         return view('document', $view_variables);
     }
 	
@@ -181,7 +192,6 @@ class DocumentController extends Controller
 			$table .= "<tr><td class='col-md-1'>$rank</td><td>" . filter_var($word->word, FILTER_SANITIZE_STRING) . "</td><td>$word->quantity (" . round($word->quantity / $ratio_denominator * 100, 2) . "%)</td></tr>";
 			$rank++;
 		}
-		//$table .= '<tr><td colspan="3"><a class="text-center" role="button" data-toggle="collapse" href="#collapseWords' . $table_id . '" aria-expanded="false" aria-controls="collapseWords' . $table_id . '">Collapse Table</a></td></tr>';
 		$table .= '</tbody></table></div></div>' . '<p></p>';
 		return $table;
 	}
@@ -224,6 +234,10 @@ class DocumentController extends Controller
         return view('owned_documents', ['table' => $table]);
 	}
 	
+	/*
+     * Deletes a document if authorized
+     *
+     */
 	public function delete_document($id){
 		$user_id = Auth::id();
 		$document_id = intval($id);
@@ -253,15 +267,13 @@ class DocumentController extends Controller
 		$user_id = Auth::id();
 		$document_id = intval($id);
 		$document = DB::table('documents')->select('id', 'text', 'created_by', 'is_private')->where('id', $document_id)->first();
-		if(!isset($document)){
-			return Redirect::to("/home");//TODO 
-		}
-		else{
+		if(isset($document)){
 			if($user_id === $document->created_by || !$document->is_private){
 				$return_url = '/document/' . $document->id;
 				return view('raw_document', ['main_text' => $document->text, 'return_url'=> $return_url]);
 			}
 		}
+		return Redirect::to('home')->with('message', '<p class="bg-warning">Document not found.</p>');
 	}
 	
 }
