@@ -35,6 +35,10 @@
 					@endif
 					
 					{!! $paragraph_scope_string !!}
+					
+					@if(isset($paragraph_lengths))
+					<div id="paragraph_lengths_chart_div"></div>
+					@endif
 
 					
                 </div>
@@ -137,6 +141,17 @@
 		chart.draw(data, options);
 	}
 	@endif	
+	
+	@if(isset($paragraph_lengths))
+	google.charts.setOnLoadCallback(drawParagraphLengthsChart);
+    function drawParagraphLengthsChart() {
+		var paragraph_lengths = {!! $paragraph_lengths !!};
+		var data = new google.visualization.arrayToDataTable(paragraph_lengths);
+		var chart = new google.visualization.ColumnChart(document.getElementById('paragraph_lengths_chart_div'));
+		var options = {'title': 'Paragraph Lengths', 'legend':'none'};
+		chart.draw(data, options);
+    }
+	@endif
 </script>
 @endif
 
