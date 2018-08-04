@@ -15,18 +15,18 @@
                 <div class="panel-heading"><h2 style="text-align:center">{!! $title !!}</h2>{!! $raw_url !!}</div>
 
                 <div class="panel-body">
-                    
+                   
 					{!! $main_text !!}
 					
 					{!! $word_scope_string !!}
 					
-					@if(isset($word_lengths))
+					@if(isset($word_lengths_chart))
 					<div id="word_lengths_chart_div"></div>
 					@endif
 					
 					{!! $sentence_scope_string !!}
 					
-					@if(isset($sentence_lengths))
+					@if(isset($sentence_lengths_chart))
 					<div id="sentence_lengths_chart_div"></div>
 					@endif
 					
@@ -36,13 +36,15 @@
 					
 					{!! $paragraph_scope_string !!}
 					
-					@if(isset($paragraph_lengths))
+					@if(isset($paragraph_lengths_chart))
 					<div id="paragraph_lengths_chart_div"></div>
 					@endif
 
 					
                 </div>
-			
+				<div class="panel-footer">
+						<p>Processing Time: {{ $run_time }}</p>
+				</div>
             </div>
 			
         </div>
@@ -103,19 +105,19 @@
 @endsection
 
 @section('scripts')
-@if(isset($sentence_lengths) || isset($word_lengths))
+@if(isset($sentence_lengths_chart) || isset($word_lengths_chart))
 <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 <script type="text/javascript">
     google.charts.load('current', {'packages':['corechart', 'line', 'bar']});
 
-	@if(isset($sentence_lengths))
+	@if(isset($sentence_lengths_chart))
 	google.charts.setOnLoadCallback(drawSentenceLengthsChart);
     function drawSentenceLengthsChart() {
-		var sentence_lengths = {!! $sentence_lengths !!};
-		var data = new google.visualization.arrayToDataTable(sentence_lengths);
+		var sentence_lengths_chart = {!! $sentence_lengths_chart !!};
+		var data = new google.visualization.arrayToDataTable(sentence_lengths_chart);
 		var chart = new google.visualization.ColumnChart(document.getElementById('sentence_lengths_chart_div'));
-		var options = {'title': 'Sentence Lengths', 'legend':'none'};
+		var options = {'title': 'Sentence Lengths (in words)', 'legend':'none'};
 		chart.draw(data, options);
     }
 	@endif
@@ -131,24 +133,24 @@
     }
 	@endif
 	
-	@if(isset($word_lengths))
+	@if(isset($word_lengths_chart))
 	google.charts.setOnLoadCallback(drawWordLengthsChart);
 	function drawWordLengthsChart(){
-		var word_lengths = {!! $word_lengths !!};
-		var data = new google.visualization.arrayToDataTable(word_lengths);
+		var word_lengths_chart = {!! $word_lengths_chart !!};
+		var data = new google.visualization.arrayToDataTable(word_lengths_chart);
 		var chart = new google.visualization.ColumnChart(document.getElementById('word_lengths_chart_div'));
 		var options = {'title': 'Word Lengths', 'legend':'none'};
 		chart.draw(data, options);
 	}
 	@endif	
 	
-	@if(isset($paragraph_lengths))
+	@if(isset($paragraph_lengths_chart))
 	google.charts.setOnLoadCallback(drawParagraphLengthsChart);
     function drawParagraphLengthsChart() {
-		var paragraph_lengths = {!! $paragraph_lengths !!};
-		var data = new google.visualization.arrayToDataTable(paragraph_lengths);
+		var paragraph_lengths_chart = {!! $paragraph_lengths_chart !!};
+		var data = new google.visualization.arrayToDataTable(paragraph_lengths_chart);
 		var chart = new google.visualization.ColumnChart(document.getElementById('paragraph_lengths_chart_div'));
-		var options = {'title': 'Paragraph Lengths', 'legend':'none'};
+		var options = {'title': 'Paragraph Lengths (in sentences)', 'legend':'none'};
 		chart.draw(data, options);
     }
 	@endif

@@ -41,7 +41,7 @@ class DocumentController extends Controller
     public function index($id)
     {
 		$document_id = intval($id);
-		$document = DB::table('documents as d')->join('users', 'users.id', '=', 'd.created_by')->select('d.id as id', 'd.title', 'd.version', 'd.type', 'd.is_private', 'd.text',  'd.word_count', 'd.unique_word_count', 'd.average_word_length',  'd.character_count', 'd.created_at', 'users.name as created_by', 'd.created_by as created_by_id', 'd.sentence_count', 'd.period_end_count', 'd.question_end_count', 'd.exclaim_end_count', 'd.longest_sentence_word_count', 'd.longest_sentence_content', 'd.shortest_sentence_word_count', 'd.shortest_sentence_content', 'd.average_sentence_word_length', 'd.average_sentence_character_length', 'd.sentence_lengths', 'd.word_lengths', 'd.commas_per_sentence', 'd.longest_word', 'd.description', 'd.dialogue_paragraph_count', 'd.non_dialogue_paragraph_count', 'd.average_paragraph_word_count', 'd.paragraph_lengths')->where('d.id', $document_id)->first();
+		$document = DB::table('documents as d')->join('users', 'users.id', '=', 'd.created_by')->select('d.id as id', 'd.title', 'd.version', 'd.type', 'd.is_private', 'd.text',  'd.word_count', 'd.unique_word_count', 'd.average_word_length',  'd.character_count', 'd.created_at', 'users.name as created_by', 'd.created_by as created_by_id', 'd.sentence_count', 'd.period_end_count', 'd.question_end_count', 'd.exclaim_end_count', 'd.longest_sentence_word_count', 'd.longest_sentence_content', 'd.shortest_sentence_word_count', 'd.shortest_sentence_content', 'd.average_sentence_word_length', 'd.average_sentence_character_length', 'd.sentence_lengths_chart', 'd.word_lengths_chart', 'd.commas_per_sentence', 'd.longest_word', 'd.description', 'd.dialogue_paragraph_count', 'd.non_dialogue_paragraph_count', 'd.average_paragraph_word_count', 'd.paragraph_lengths_chart', 'd.run_time')->where('d.id', $document_id)->first();
 		$view_variables = array();
 
 		if(!isset($document)){
@@ -110,8 +110,8 @@ class DocumentController extends Controller
 		}
 		
 		//Word Lengths Chart
-		if(strlen($document->word_lengths) > 0){
-			$view_variables['word_lengths'] = $document->word_lengths;
+		if(strlen($document->word_lengths_chart) > 0){
+			$view_variables['word_lengths_chart'] = $document->word_lengths_chart;
 		}
 		
 		/*
@@ -121,7 +121,7 @@ class DocumentController extends Controller
 		$sentence_scope_string = "<hr><h3>Sentence Scope Analysis:</h3>";
 		
 		$other_sentence_ending_count = $document->sentence_count - $document->period_end_count - $document->exclaim_end_count - $document->question_end_count;
-		$sentence_scope_string .= '<table class="table table-responsive table-striped"><thead><tr><th>Sentence End Punctuation</th><th>Quantity</th><th>%</th></tr></thead><tbody><tr><td>Period</td><td>' . $document->period_end_count . '</td><td>' . self::fraction_to_percent($document->period_end_count, $document->sentence_count) . '</td></tr><tr><td>Interrogation Point</td><td>' . $document->question_end_count . '</td><td>' . self::fraction_to_percent($document->question_end_count, $document->sentence_count) . '</td></tr><tr><td>Exclamation Mark</td><td>' . $document->exclaim_end_count . '</td><td>' . self::fraction_to_percent($document->exclaim_end_count, $document->sentence_count) . '</td></tr><tr><td>Other</td><td>' . $other_sentence_ending_count . '</td><td>' . self::fraction_to_percent($other_sentence_ending_count, $document->sentence_count) . '</td></tr></tbody></table>';
+		$sentence_scope_string .= '<table class="table table-responsive table-striped"><thead><tr><th>Sentence End Punctuation</th><th>Quantity</th><th>%</th></tr></thead><tbody><tr><td>Period</td><td>' . $document->period_end_count . '</td><td>' . self::fraction_to_percent($document->period_end_count, $document->sentence_count) . '</td></tr><tr><td>Interrogation Point</td><td>' . $document->question_end_count . '</td><td>' . self::fraction_to_percent($document->question_end_count, $document->sentence_count) . '</td></tr><tr><td>Exclamation Mark</td><td>' . $document->exclaim_end_count . '</td><td>' . self::fraction_to_percent($document->exclaim_end_count, $document->sentence_count) . '</td></tr><tr><td>Other/None</td><td>' . $other_sentence_ending_count . '</td><td>' . self::fraction_to_percent($other_sentence_ending_count, $document->sentence_count) . '</td></tr></tbody></table>';
 		$sentence_scope_string .= '<p>Total Sentence Count: ' . $document->sentence_count . '</p>';
 		$sentence_scope_string .= '<p>Average Sentence Length: ' . round($document->average_sentence_word_length, 2) . ' word' . self::handle_plural($document->average_sentence_word_length) . ' (' . round($document->average_sentence_character_length, 2) . ' character' . self::handle_plural($document->average_sentence_character_length) . ')</p>';
 		$sentence_scope_string .= 'Shortest Sentence <small>(' . strlen($document->shortest_sentence_content) . ' character' . self::handle_plural(strlen($document->shortest_sentence_content)) . ', or ' . $document->shortest_sentence_word_count . ' word' . self::handle_plural($document->shortest_sentence_word_count) . ')</small>: <blockquote>' . filter_var($document->shortest_sentence_content, FILTER_SANITIZE_STRING) . '</blockquote>';
@@ -134,8 +134,8 @@ class DocumentController extends Controller
 		}			
 		
 		//Sentence Lengths Chart
-		if(strlen($document->sentence_lengths) > 0){
-			$view_variables['sentence_lengths'] = $document->sentence_lengths;
+		if(strlen($document->sentence_lengths_chart) > 0){
+			$view_variables['sentence_lengths_chart'] = $document->sentence_lengths_chart;
 		}
 		
 		//Commas vs Sentence Lengths Chart
@@ -144,8 +144,8 @@ class DocumentController extends Controller
 		}
 		
 		//Paragraph Lengths Chart
-		if(strlen($document->paragraph_lengths) > 0){
-			$view_variables['paragraph_lengths'] = $document->paragraph_lengths;
+		if(strlen($document->paragraph_lengths_chart) > 0){
+			$view_variables['paragraph_lengths_chart'] = $document->paragraph_lengths_chart;
 		}
 				
 		/*
@@ -170,7 +170,7 @@ class DocumentController extends Controller
 		}
 
 		//Send off
-		$view_variables += ['title' => $document->title, 'raw_url'=> $raw_url, 'main_text' => $main_text, 'collection_options' => $collection_options, 'document_id' => $document_id, 'paragraph_scope_string' => $paragraph_scope_string, 'sentence_scope_string' => $sentence_scope_string, 'word_scope_string' => $word_scope_string];
+		$view_variables += ['title' => $document->title, 'raw_url'=> $raw_url, 'main_text' => $main_text, 'collection_options' => $collection_options, 'document_id' => $document_id, 'paragraph_scope_string' => $paragraph_scope_string, 'sentence_scope_string' => $sentence_scope_string, 'word_scope_string' => $word_scope_string, 'run_time' => $document->run_time];
         return view('document', $view_variables);
     }
 	
