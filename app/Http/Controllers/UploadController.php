@@ -36,13 +36,49 @@ class Sentence{
 	protected $word_list = array();
 	protected $ends_in_dialogue = false;
 	
+	public function __construct($text, $continuing_dialogue = false){
+		$this->text = $text;
+		//if the text ends with a quote, use second to last character instead
+		$last_char = substr($text, -1);
+		if($last_char == '"' || $last_char == '\''){
+			$last_char = substr($text, -2, 1);
+		}
+		
+		$this->end_punctuation = $last_char;//usually . ! ? -
+		$sentence_chunks = preg_split('/(?<=[\s,;.!?()"–])/', $text);
+		array_walk($sentence_chunks, 'self::trim_value');
+		array_walk($sentence_chunks, 'self::convert_string_mb');
+		
+		$remove = array(',','.','?','!');
+		$sentence_chunks = str_replace($remove, '', $sentence_chunks);//remove unwanted characters
+		//$sentence_chunks = array_filter($sentence_chunks, function($value) { return $value !== '' && $value !== '?';});//TODO make remove empties function // && $value !== '"' && $value !== '-'
+		$sentence_chunks = array_filter($sentence_chunks, 'strlen');//TODO make remove empties function // && $value !== '"' && $value !== '-'
+		
+		$is_in_dialogue = $continuing_dialogue;
+		foreach($sentence_chunks as $word){
+			if(strpos($word, '"') !== false){
+				$is_in_dialogue = !$is_in_dialogue;
+				$this->has_dialogue = true;
+			}
+			$word_in_dialogue = $is_in_dialogue;
+			
+			if(strpos($word, '"') === strlen($word) - 1){
+				$word_in_dialogue = true;
+			}
+			
+			$this->word_list[] = new Word($word, $word_in_dialogue);
+
+		}
+		
+		$this->ends_in_dialogue = $is_in_dialogue;
+		$this->word_list = array_filter($this->word_list, function($value){return $value !== '';});
+		
+		$this->word_count = count($this->word_list);
+	}
+	
 	function trim_value(&$value){
 		$value = trim($value);
 	}	
-	
-	public function convert_string(&$value){
-		$value = iconv("UTF-8", "UTF-8//IGNORE", $value);
-	}
 	
 	public function convert_string_mb(&$value){
 		$value = mb_convert_encoding($value , 'UTF-8' , 'UTF-8');
@@ -62,52 +98,6 @@ class Sentence{
 	
 	public function get_ends_in_dialogue(){
 		return $this->ends_in_dialogue;
-	}
-	
-	public function __construct($text, $continuing_dialogue = false){
-		$this->text = $text;
-		//if the text ends with a quote, use second to last character instead
-		$last_char = substr($text, -1);
-		if($last_char == '"' || $last_char == '”' || $last_char == '\''){
-			$last_char = substr($text, -2, 1);
-		}
-		
-		$this->end_punctuation = $last_char;//usually . ! - ?
-		$sentence_chunks = preg_split('/(?<=[\s,;.!?()"“”–])/', $text);
-		array_walk($sentence_chunks, 'self::trim_value');
-		array_walk($sentence_chunks, 'self::convert_string_mb');
-		
-		$remove = array(',','.','?','!');
-		$sentence_chunks = str_replace($remove, '', $sentence_chunks);
-		
-		$sentence_chunks = array_filter($sentence_chunks, function($value) { return $value !== '' && $value !== '?';});
-		
-		$is_in_dialogue = $continuing_dialogue;
-		foreach($sentence_chunks as $word){
-			
-			if(strpos($word, '"') !== false){
-				$is_in_dialogue = !$is_in_dialogue;
-				$this->has_dialogue = true;
-			}
-			// if(strpos($word, '“') !== false){
-				// dd("found opening smart quote");
-				// $is_in_dialogue = true;
-				// $this->has_dialogue = true;
-			// }
-			// if(strpos($word, '”') !== false){
-				// $is_in_dialogue = false;
-			// }
-			
-			if($word !== '"' && $word !== '“' && $word !== '”' && $word !== '-'){
-				$this->word_list[] = new Word($word, $is_in_dialogue);
-			}
-
-		}
-		
-		$this->ends_in_dialogue = $is_in_dialogue;
-		$this->word_list = array_filter($this->word_list, function($value){return $value !== '';});
-		
-		$this->word_count = count($this->word_list);
 	}
 	
 }
@@ -134,12 +124,14 @@ class Paragraph{
 		
 	public function __construct($text){
 		//note \p{Lu} in the following line matches any uppercase letter that has a lowercase variant, \p{L} is any letter in any language
-		$sentence_content_list = preg_split('/(?<=[”.?!\r\n]|-)(?<![\s"“\']\p{Lu}.|\s\p{Lu}[a-z].)(?=[\s\'"”“]+\p{Lu}|"|\d|“)(?![\'”"])/', $text);
+		//$sentence_content_list = preg_split('/(?<=[”.?!\r\n]|-)(?<![\s"“\']\p{Lu}.|\s\p{Lu}[a-z].)(?=[\s\'"”“]+\p{Lu}|"|\d|“)(?![\'”"])/', $text);
+		//reminder that smartquotes were converted to standard quotes already
+		$sentence_content_list = preg_split('/(?<=[.?!\r\n]|-)(?<![\s"\']\p{Lu}.|\s\p{Lu}[a-z].|[,?!]")(?=[\s\'"]+\p{Lu}|"|\d)(?![\'"])/', $text);
 		array_walk($sentence_content_list, 'self::trim_value');
 		array_walk($sentence_content_list, 'self::convert_string_mb');
 		$sentence_content_list = array_filter($sentence_content_list, function($value) { return $value !== '' && $value !== '?';});
 
-		if(strpos($text, '"') !== false || strpos($text, '“') !== false){
+		if(strpos($text, '"') !== false){
 			$this->has_dialogue = true;
 		}
 		
@@ -168,9 +160,15 @@ class UploadController extends Controller
 	public $previous_frontword = null;
 	
 	public $period_end_count = 0;
+	public $period_end_count_in_dialogue = 0;
 	public $question_end_count = 0;
+	public $question_end_count_in_dialogue = 0;
 	public $exclaim_end_count = 0;
+	public $exclaim_end_count_in_dialogue = 0;
 	public $dash_end_count = 0;
+	public $dash_end_count_in_dialogue = 0;
+	public $other_end_count = 0;
+	public $other_end_count_in_dialogue = 0;
 		
 	public $longest_sentence_word_count = -1;	
 	public $shortest_sentence_word_count = -1;
@@ -247,33 +245,51 @@ class UploadController extends Controller
 		return $word_object->get_word_list();
 	}
 	
-	public function handle_sentence($s){
-		$word_object_list = $s->get_word_list();
+	public function handle_sentence($sentence){
+		$word_object_list = $sentence->get_word_list();
 		
-		$word_list = array();
-		foreach($s->get_word_list() as $word_object){
-			$word_list[] = $word_object->get_content();
+		$sentence_word_list = array();
+		foreach($sentence->get_word_list() as $word_object){
+			$sentence_word_list [] = $word_object->get_content();
 		}
 		
 		
-		if(count($word_list) > 0){
-			array_push($this->raw_word_list, ...$word_list);
+		if(count($sentence_word_list ) > 0){
+			array_push($this->raw_word_list, ...$sentence_word_list );
 		}
 		
-		if($s->get_end_punctuation() === '.'){
+		if($sentence->get_end_punctuation() === '.'){
 			$this->period_end_count ++;
+			if($sentence->get_ends_in_dialogue()){
+				$this->period_end_count_in_dialogue ++;
+			}
 		}
-		elseif($s->get_end_punctuation() === '?'){
+		elseif($sentence->get_end_punctuation() === '?'){
 			$this->question_end_count ++;
+			if($sentence->get_ends_in_dialogue()){
+				$this->question_end_count_in_dialogue ++;
+			}
 		}
-		elseif($s->get_end_punctuation() === '!'){
+		elseif($sentence->get_end_punctuation() === '!'){
 			$this->exclaim_end_count ++;
+			if($sentence->get_ends_in_dialogue()){
+				$this->exclaim_end_count_in_dialogue ++;
+			}
 		}
-		elseif($s->get_end_punctuation() === '-'){//TODO or em dash
+		elseif($sentence->get_end_punctuation() === '-' || $sentence->get_end_punctuation() === '—'){//en or em dash
 			$this->dash_end_count ++;
+			if($sentence->get_ends_in_dialogue()){
+				$this->dash_end_count_in_dialogue ++;
+			}
 		}
 		else{
+			$this->other_end_count ++;
+			if($sentence->get_ends_in_dialogue()){
+				$this->other_end_count_in_dialogue ++;
+			}
 			
+			//TODO
+			//dd($sentence->get_end_punctuation());
 		}
 		
 		//adding to frontwords frequency list
@@ -299,9 +315,9 @@ class UploadController extends Controller
 		}
 		
 		//adding to non frontwords frequency list
-		if(count($word_list) >= 2){
-			foreach($word_list as $word){
-				if($word !== reset($word_list)){
+		if(count($sentence_word_list) >= 2){
+			foreach($sentence_word_list as $word){
+				if($word !== reset($sentence_word_list)){
 					if(isset($this->sentence_non_frontwords[$word])){
 						$this->sentence_non_frontwords[$word] ++;
 					}
@@ -313,42 +329,42 @@ class UploadController extends Controller
 		}
 		
 		//adding to sentence_lengths list
-		if(!isset($this->sentence_lengths[count($word_list)])){
-			$this->sentence_lengths[count($word_list)] = 1;
+		if(!isset($this->sentence_lengths[count($sentence_word_list)])){
+			$this->sentence_lengths[count($sentence_word_list)] = 1;
 		}
 		else{
-			$this->sentence_lengths[count($word_list)]++;
+			$this->sentence_lengths[count($sentence_word_list)]++;
 		}
 		
 		//comma vs sentence length graph data
 		//TODO do this smarter
-		$commas_in_sentence = substr_count($s->get_text(), ',');
-		if(isset($this->sentence_length_vs_commas[count($word_list)])){
-			$this->sentence_length_vs_commas[count($word_list)] += $commas_in_sentence;
+		$commas_in_sentence = substr_count($sentence->get_text(), ',');
+		if(isset($this->sentence_length_vs_commas[count($sentence_word_list)])){
+			$this->sentence_length_vs_commas[count($sentence_word_list)] += $commas_in_sentence;
 		}
 		else{
-			$this->sentence_length_vs_commas[count($word_list)] = $commas_in_sentence;
+			$this->sentence_length_vs_commas[count($sentence_word_list)] = $commas_in_sentence;
 		}
 		
 		//building sentence lengths stats
-		if(!isset($this->longest_sentence_content) || strlen($s->get_text()) > strlen($this->longest_sentence_content)){
-			$this->longest_sentence_word_count = count($word_list);
-			$this->longest_sentence_content = $s->get_text();
+		if(!isset($this->longest_sentence_content) || strlen($sentence->get_text()) > strlen($this->longest_sentence_content)){
+			$this->longest_sentence_word_count = count($sentence_word_list);
+			$this->longest_sentence_content = $sentence->get_text();
 		}
-		if(!isset($this->shortest_sentence_content) || strlen($s->get_text()) < strlen($this->shortest_sentence_content)){
-			$this->shortest_sentence_word_count = count($word_list);
-			$this->shortest_sentence_content = $s->get_text();
+		if(!isset($this->shortest_sentence_content) || strlen($sentence->get_text()) < strlen($this->shortest_sentence_content)){
+			$this->shortest_sentence_word_count = count($sentence_word_list);
+			$this->shortest_sentence_content = $sentence->get_text();
 		}
 		
-		$this->total_characters += strlen($s->get_text());
+		$this->total_characters += strlen($sentence->get_text());
 	}
 	
 	//TODO merge into histograms function?
 	public function get_word_lengths_chart_data($paragraphs){
 		$word_lengths = array();
-		foreach($paragraphs as $p){
-			foreach($p->get_sentence_list() as $s){
-				foreach($s->get_word_list() as $word_object){
+		foreach($paragraphs as $paragraph){
+			foreach($paragraph->get_sentence_list() as $sentence){
+				foreach($sentence->get_word_list() as $word_object){
 					$w = $word_object->get_content();
 					if(isset($word_lengths[strlen($w)])){
 						$word_lengths[strlen($w)] ++;
@@ -416,12 +432,14 @@ class UploadController extends Controller
 		$text = trim(Input::get('text'));
 		self::convert_string($text);
 		
-		$change = array('”','“');
-		$text = str_replace($change, '"', $text);
+		//replace smart quotes with standard quotes
+		$smart_quotes = array('”','“');
+		$text = str_replace($smart_quotes, '"', $text);
 		
 		$document->text = $text;
 		$document->character_count = strlen($document->text);
-		$document->type = substr(filter_var(trim(Input::get('type')), FILTER_SANITIZE_STRING),0,64);
+		#$document->type = substr(filter_var(trim(Input::get('type')), FILTER_SANITIZE_STRING),0,64);
+		$document->type = self::clean_string(Input::get('type'), 64);
 		$document->is_private = Input::get('is_private') ? true : false;
 		$document->created_by = (Auth::Check()) ? intval(Auth::user()->id) : -1;
 		$document->created_at = date('Y-m-d H:i:s');//use current date
@@ -450,7 +468,7 @@ class UploadController extends Controller
 		 */
 		$all_paragraphs = preg_split('/(?<=[\r\n])/', $document->text);
 		array_walk($all_paragraphs, 'self::trim_value');
-		$all_paragraphs = array_filter($all_paragraphs, function($value) { return $value !== ''; });
+		$all_paragraphs = array_filter($all_paragraphs, function($value) { return $value !== ''; });//remove empty paragraphs
 
 		$document->dialogue_paragraph_count = 0;
 		$document->non_dialogue_paragraph_count = 0;
@@ -461,10 +479,10 @@ class UploadController extends Controller
 		unset($all_paragraphs);
 		
 		/*
-		 * Sentence-scope processing:
-		 * 
+		 * Sentence-scope count processing:
+		 *
 		 */
-		$sentences_in_paragraphs = array();
+		$sentence_counts_in_paragraphs = array();
 
 		foreach($paragraph_objects as $paragraph){
 			$sentence_count = count($paragraph->get_sentence_list());
@@ -476,11 +494,11 @@ class UploadController extends Controller
 				$document->non_dialogue_paragraph_count ++;
 			}
 			
-			if(isset($sentences_in_paragraphs[$sentence_count])){
-				$sentences_in_paragraphs[$sentence_count] ++;
+			if(isset($sentence_counts_in_paragraphs[$sentence_count])){
+				$sentence_counts_in_paragraphs[$sentence_count] ++;
 			}
 			else{
-				$sentences_in_paragraphs[$sentence_count] = 1;
+				$sentence_counts_in_paragraphs[$sentence_count] = 1;
 			}
 			
 			$document->sentence_count += $sentence_count;
@@ -494,8 +512,13 @@ class UploadController extends Controller
 		}
 		
 		$document->period_end_count = $this->period_end_count;
+		$document->period_end_count_in_dialogue = $this->period_end_count_in_dialogue;
 		$document->question_end_count = $this->question_end_count;
+		$document->question_end_count_in_dialogue = $this->question_end_count_in_dialogue;
 		$document->exclaim_end_count = $this->exclaim_end_count;
+		$document->exclaim_end_count_in_dialogue = $this->exclaim_end_count_in_dialogue;
+		$document->dash_end_count = $this->dash_end_count;
+		$document->dash_end_count_in_dialogue = $this->dash_end_count_in_dialogue;
 		
 		$document->longest_sentence_word_count = $this->longest_sentence_word_count;
 		$document->longest_sentence_content = $this->longest_sentence_content;	
@@ -527,7 +550,7 @@ class UploadController extends Controller
 		$document->sentence_lengths_chart = self::histogram_string_from_array($this->sentence_lengths, 'Sentence Lengths (in words)');
 		
 		//Create paragraph_lengths string for chart
-		$document->paragraph_lengths_chart = self::histogram_string_from_array($sentences_in_paragraphs, 'Paragraph Length (in sentences)', 1);
+		$document->paragraph_lengths_chart = self::histogram_string_from_array($sentence_counts_in_paragraphs, 'Paragraph Length (in sentences)', 1);
 
 		/*
 		 * Word-scope processing:
@@ -564,7 +587,7 @@ class UploadController extends Controller
 			$document->average_word_length = $total_chars / max($document->word_count, 1);
 			arsort($word_frequency_list);
 			
-			//create a postgres stoplist version
+			//create a postgres stoplist version of the list
 			foreach($word_frequency_list as $word => $frequency){
 				if(!self::is_in_stoplist($word)){
 					$word_list_postgres_stoplist[$word] = $frequency;
@@ -579,7 +602,7 @@ class UploadController extends Controller
 		$proper_names_list = array();
 		if(count($this->sentence_non_frontwords) > 0){
 			//Create proper nouns list
-			//TODO: how to filter out start of dialogue following an opening tag, IE [He smiled and said, "Sure."]
+			//TODO: how to filter out start of dialogue following an opening tag, IE [He said, "Sure."]
 			
 			foreach($this->sentence_non_frontwords as $word => $frequency){
 				if(!self::is_in_stoplist($word)){
@@ -633,9 +656,10 @@ class UploadController extends Controller
 						}
 					}
 				}
+				$temps .= "\n";
 			}
 		}
-		// dd($temps);
+		dd($temps);
 		
 		
 		$document->run_time = '' . (microtime(true) - $start);	

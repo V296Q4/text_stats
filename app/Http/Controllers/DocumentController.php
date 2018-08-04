@@ -41,7 +41,7 @@ class DocumentController extends Controller
     public function index($id)
     {
 		$document_id = intval($id);
-		$document = DB::table('documents as d')->join('users', 'users.id', '=', 'd.created_by')->select('d.id as id', 'd.title', 'd.version', 'd.type', 'd.is_private', 'd.text',  'd.word_count', 'd.unique_word_count', 'd.average_word_length',  'd.character_count', 'd.created_at', 'users.name as created_by', 'd.created_by as created_by_id', 'd.sentence_count', 'd.period_end_count', 'd.question_end_count', 'd.exclaim_end_count', 'd.longest_sentence_word_count', 'd.longest_sentence_content', 'd.shortest_sentence_word_count', 'd.shortest_sentence_content', 'd.average_sentence_word_length', 'd.average_sentence_character_length', 'd.sentence_lengths_chart', 'd.word_lengths_chart', 'd.commas_per_sentence', 'd.longest_word', 'd.description', 'd.dialogue_paragraph_count', 'd.non_dialogue_paragraph_count', 'd.average_paragraph_word_count', 'd.paragraph_lengths_chart', 'd.run_time')->where('d.id', $document_id)->first();
+		$document = DB::table('documents as d')->join('users', 'users.id', '=', 'd.created_by')->select('d.id as id', 'd.title', 'd.version', 'd.type', 'd.is_private', 'd.text',  'd.word_count', 'd.unique_word_count', 'd.average_word_length',  'd.character_count', 'd.created_at', 'users.name as created_by', 'd.created_by as created_by_id', 'd.sentence_count', 'd.period_end_count', 'd.question_end_count', 'd.exclaim_end_count', 'd.dash_end_count', 'd.longest_sentence_word_count', 'd.longest_sentence_content', 'd.shortest_sentence_word_count', 'd.shortest_sentence_content', 'd.average_sentence_word_length', 'd.average_sentence_character_length', 'd.sentence_lengths_chart', 'd.word_lengths_chart', 'd.commas_per_sentence', 'd.longest_word', 'd.description', 'd.dialogue_paragraph_count', 'd.non_dialogue_paragraph_count', 'd.average_paragraph_word_count', 'd.paragraph_lengths_chart', 'd.run_time', 'd.period_end_count_in_dialogue', 'd.question_end_count_in_dialogue', 'd.exclaim_end_count_in_dialogue', 'd.dash_end_count_in_dialogue')->where('d.id', $document_id)->first();
 		$view_variables = array();
 
 		if(!isset($document)){
@@ -93,18 +93,18 @@ class DocumentController extends Controller
 
 		//Create Frequent Words table
 		if($percent_unique_words != 100){
-			$frequent_words = DB::table('document_word')->select('word', 'quantity')->where([['document_id', $document_id], ['category_id', 0]])->orderBy('quantity', 'desc')->get();
+			$frequent_words = DB::table('document_word')->select('word', 'quantity')->where([['document_id', $document_id], ['category_id', 0]])->orderBy('quantity', 'desc')->orderBy('word','asc')->get();
 			$word_scope_string .= self::create_word_table($document->word_count, $frequent_words, 0, 'Word Frequencies', 'Top 50 words.');
 		}
 		
 		//Create Stoplisted Frequent Words table
-		$frequent_words_stoplist = DB::table('document_word')->select('word', 'quantity')->where([['document_id', $document_id], ['category_id', 1]])->orderBy('quantity', 'desc')->get();
+		$frequent_words_stoplist = DB::table('document_word')->select('word', 'quantity')->where([['document_id', $document_id], ['category_id', 1]])->orderBy('quantity', 'desc')->orderBy('word','asc')->get();
 		if(count($frequent_words_stoplist) > 0){
 			$word_scope_string .= self::create_word_table($document->word_count, $frequent_words_stoplist, 1, 'Filtered Word Frequencies', 'Top 50 words, excluding the most common.  <a href="/stoplist">Stoplist here</a>.');
 		}
 		
 		//Create Frequent Proper Nouns Table
-		$proper_word_list = DB::table('document_word')->select('word', 'quantity')->where([['document_id', $document_id], ['category_id', 3]])->orderBy('quantity', 'desc')->get();
+		$proper_word_list = DB::table('document_word')->select('word', 'quantity')->where([['document_id', $document_id], ['category_id', 3]])->orderBy('quantity', 'desc')->orderBy('word','asc')->get();
 		if(count($proper_word_list) > 0){
 			$word_scope_string .= self::create_word_table($document->word_count, $proper_word_list, 2, 'Proper Noun Frequencies', 'Top 50 detected proper nouns.  Experimental - not 100% accurate.');
 		}
@@ -118,17 +118,26 @@ class DocumentController extends Controller
 		 * Sentence Scope Statistics
 		 *
 		 */
-		$sentence_scope_string = "<hr><h3>Sentence Scope Analysis:</h3>";
+		$sentence_scope_string = '<hr><h3>Sentence Scope Analysis:</h3>';
 		
-		$other_sentence_ending_count = $document->sentence_count - $document->period_end_count - $document->exclaim_end_count - $document->question_end_count;
-		$sentence_scope_string .= '<table class="table table-responsive table-striped"><thead><tr><th>Sentence End Punctuation</th><th>Quantity</th><th>%</th></tr></thead><tbody><tr><td>Period</td><td>' . $document->period_end_count . '</td><td>' . self::fraction_to_percent($document->period_end_count, $document->sentence_count) . '</td></tr><tr><td>Interrogation Point</td><td>' . $document->question_end_count . '</td><td>' . self::fraction_to_percent($document->question_end_count, $document->sentence_count) . '</td></tr><tr><td>Exclamation Mark</td><td>' . $document->exclaim_end_count . '</td><td>' . self::fraction_to_percent($document->exclaim_end_count, $document->sentence_count) . '</td></tr><tr><td>Other/None</td><td>' . $other_sentence_ending_count . '</td><td>' . self::fraction_to_percent($other_sentence_ending_count, $document->sentence_count) . '</td></tr></tbody></table>';
+		$sentence_end_table = '<table class="table table-responsive table-striped"><thead><tr><th>Sentence End Punctuation</th><th>Narrative</th><th>Dialogue</th><th>Total</th></tr></thead>';
+		
+		$sentence_end_table .= '<tbody><tr><td>Period</td><td>' . ($document->period_end_count - $document->period_end_count_in_dialogue) . ' ('. self::fraction_to_percent($document->period_end_count - $document->period_end_count_in_dialogue, $document->sentence_count) . '%)</td><td>' . $document->period_end_count_in_dialogue . ' (' . self::fraction_to_percent($document->period_end_count_in_dialogue, $document->sentence_count) . '%)</td><td>' . $document->period_end_count . ' (' . self::fraction_to_percent($document->period_end_count, $document->sentence_count) . '%)</td></tr>';
+		
+		$sentence_end_table .= '<tr><td>Interrogation Point</td><td>' . ($document->question_end_count - $document->question_end_count_in_dialogue) . ' (' . self::fraction_to_percent($document->question_end_count - $document->question_end_count_in_dialogue, $document->sentence_count) . '%)</td><td>' . $document->question_end_count_in_dialogue . ' (' . self::fraction_to_percent($document->question_end_count_in_dialogue, $document->sentence_count) . '%)</td><td>' . $document->question_end_count . ' (' . self::fraction_to_percent($document->question_end_count, $document->sentence_count) . '%)</td></tr>';
+		$sentence_end_table .= '<tr><td>Exclamation Mark</td><td>' . ($document->exclaim_end_count - $document->exclaim_end_count_in_dialogue) . ' (' . self::fraction_to_percent($document->exclaim_end_count - $document->exclaim_end_count_in_dialogue, $document->sentence_count) . '%)</td><td>' . $document->exclaim_end_count_in_dialogue . ' (' . self::fraction_to_percent($document->exclaim_end_count_in_dialogue, $document->sentence_count) . '%)</td><td>' . $document->exclaim_end_count . ' (' . self::fraction_to_percent($document->exclaim_end_count, $document->sentence_count) . '%)</td></tr>';
+		$sentence_end_table .= '<tr><td>Dash (en & em)</td><td>' . ($document->dash_end_count - $document->dash_end_count_in_dialogue) . ' (' . self::fraction_to_percent($document->dash_end_count - $document->dash_end_count_in_dialogue, $document->sentence_count) . '%)</td><td>' . $document->dash_end_count_in_dialogue . ' (' . self::fraction_to_percent($document->dash_end_count_in_dialogue, $document->sentence_count) . '%)</td><td>' . $document->dash_end_count . ' (' . self::fraction_to_percent($document->dash_end_count, $document->sentence_count) . '%)</td></tr>';
+		$other_sentence_ending_count = $document->sentence_count - $document->period_end_count - $document->exclaim_end_count - $document->question_end_count - $document->dash_end_count;
+		$sentence_end_table .= '<tr><td>Other/None</td><td></td><td></td><td>' . $other_sentence_ending_count . ' (' . self::fraction_to_percent($other_sentence_ending_count, $document->sentence_count) . ')</td></tr></tbody></table>';
+		
+		$sentence_scope_string .= $sentence_end_table;
 		$sentence_scope_string .= '<p>Total Sentence Count: ' . $document->sentence_count . '</p>';
 		$sentence_scope_string .= '<p>Average Sentence Length: ' . round($document->average_sentence_word_length, 2) . ' word' . self::handle_plural($document->average_sentence_word_length) . ' (' . round($document->average_sentence_character_length, 2) . ' character' . self::handle_plural($document->average_sentence_character_length) . ')</p>';
 		$sentence_scope_string .= 'Shortest Sentence <small>(' . strlen($document->shortest_sentence_content) . ' character' . self::handle_plural(strlen($document->shortest_sentence_content)) . ', or ' . $document->shortest_sentence_word_count . ' word' . self::handle_plural($document->shortest_sentence_word_count) . ')</small>: <blockquote>' . filter_var($document->shortest_sentence_content, FILTER_SANITIZE_STRING) . '</blockquote>';
 		$sentence_scope_string .= 'Longest Sentence <small>(' . strlen($document->longest_sentence_content) . ' character' . self::handle_plural($document->longest_sentence_content) . ', or ' . $document->longest_sentence_word_count . ' word' . self::handle_plural($document->longest_sentence_word_count) . ')</small>: <blockquote>' . filter_var($document->longest_sentence_content, FILTER_SANITIZE_STRING) . '</blockquote>';
 		
 		//Create Frequent Frontword Table
-		$frontword_list = DB::table('document_frontword')->select('word', 'quantity')->where('document_id', $document_id)->orderBy('quantity', 'desc')->get();
+		$frontword_list = DB::table('document_frontword')->select('word', 'quantity')->where('document_id', $document_id)->orderBy('quantity', 'desc')->orderBy('word','asc')->get();
 		if(count($frontword_list) > 1){
 			$sentence_scope_string .= self::create_word_table($document->sentence_count, $frontword_list, 3, 'Frontword Frequencies', 'Top 50 words that sentences <i>begin</i> with.');
 		}			
